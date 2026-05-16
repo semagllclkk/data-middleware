@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # 2. Konteyner: Veriyi Karşılayan ve İşleyen (Önce bu ayağa kalkmalı)
+  consumer-app:
+    build:
+      context: . # Build işlemi ana klasörden başlar ki Shared klasörünü görebilsin
+      dockerfile: Consumer/Dockerfile
+    ports:
+      - "5000:5000"
+    networks:
+      - middleware-net
+
+  # 1. Konteyner: Veriyi Üreten ve Fırlatan
+  producer-app:
+    build:
+      context: .
+      dockerfile: Producer/Dockerfile
+    depends_on:
+      - consumer-app # Consumer hazır olmadan Producer başlama demek
+    environment:
+      - CONSUMER_HOST=consumer-app # Docker network'te service adı kullan
+    networks:
+      - middleware-net
+
+# İki konteynerin birbiriyle güvenle haberleşeceği sanal ağ
+networks:
+  middleware-net:
+    driver: bridge
