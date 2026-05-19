@@ -45,6 +45,10 @@ namespace Producer
                     newLog.TCKN = "12345678901";           // KVKK: TCKN maskelenecek
                     newLog.Email = "kullanici@example.com"; // KVKK: e-posta maskelenecek
                     newLog.CreditCard = "4111-1111-1111-1111"; // KVKK: kredi kartı maskelenecek
+
+                    // Log seviyesi rastgele atanıyor — filtre INFO ve WARNING'i düşürecek
+                    string[] levels = { "INFO", "INFO", "WARNING", "ERROR", "ERROR", "ERROR", "CRITICAL" };
+                    newLog.LogLevel = levels[rnd.Next(levels.Length)];
                     
                     // Polimorfizm: Eğer bu bir hata loguysa, hata mesajını da ekle
                     if (newLog is ErrorLog errorLog) 

@@ -12,6 +12,8 @@ namespace MiddlewareProject.Models
         public string Email { get; set; }
         public string CreditCard { get; set; }
         public string City { get; set; }
+        /// <summary>INFO | WARNING | ERROR | CRITICAL</summary>
+        public string LogLevel { get; set; } = "INFO";
 
         public abstract string GetLogType();
     }

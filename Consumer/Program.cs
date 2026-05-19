@@ -33,6 +33,7 @@ namespace Consumer
             int bytesRead;
 
             // --- ZİNCİRİ İNŞA EDİYORUZ (Chain of Responsibility) ---
+            var severityFilter = new Pipeline.SeverityFilterHandler(); // Adım 0: INFO/WARNING düşür
             var filter      = new Pipeline.KvkkFilterHandler();
             var enrichment  = new Pipeline.EnrichmentHandler();
             var performance = new Pipeline.PerformanceHandler();
@@ -49,15 +50,13 @@ namespace Consumer
             formatterCsv .SetStrategy(new Consumer.Formatters.CsvFormatter());
             formatterJson.SetStrategy(new Consumer.Formatters.JsonFormatter());
 
-            // Zincir: KVKK -> Zenginlestirme -> [HTML | CSV | JSON] -> Performans
-            // Her log üç role de ayrı ayrı iletilecek; bunun için FormatterHandler'lar
-            // tek bir "fan-out" noktasında çağrılıyor.
+            // Zincir: Filtre -> KVKK -> Zenginlestirme -> [HTML | CSV | JSON] -> Performans
             var fanOut = new Pipeline.FanOutHandler(
                 new[] { formatterHtml, formatterCsv, formatterJson },
                 performance
             );
 
-            filter.SetNext(enrichment).SetNext(fanOut);
+            severityFilter.SetNext(filter).SetNext(enrichment).SetNext(fanOut);
 
             while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0)
             {
