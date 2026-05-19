@@ -6,23 +6,28 @@ namespace Consumer.Pipeline
     {
         public override void Handle(string jsonLog)
         {
-            string enrichedLog = jsonLog;
-            
-            // Eğer logun içinde ERROR veya Hata kelimesi geçiyorsa özel olarak etiketle
-            if (enrichedLog.Contains("ERROR") || enrichedLog.Contains("Hata"))
-            {
-                Console.WriteLine("[2. ADIM - ZENGİNLEŞTİRME] Kritik bir hata tespit edildi, risk seviyesi yükseltildi.");
-            }
-            else
-            {
-                 Console.WriteLine("[2. ADIM - ZENGİNLEŞTİRME] Standart log olarak sınıflandırıldı.");
-            }
+            // Özel etiketler oluştur
+            string senderId   = $"SENDER-{Guid.NewGuid().ToString()[..8].ToUpper()}";
+            string txNo       = $"TXN-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
+            bool   isCritical = jsonLog.Contains("ERROR") || jsonLog.Contains("Hata");
+            string severity   = isCritical ? "CRITICAL" : "INFO";
+            string debugNote  = isCritical
+                ? "[DEBUG] Kritik hata tespit edildi, risk seviyesi yükseltildi."
+                : "[DEBUG] Standart log, ek islem gerekmez.";
 
-            // İşlem bitti, sıradaki halkaya aktar
+            // Log string'ine etiketleri GERCEKTEN ekle
+            string enrichedLog =
+                $"{jsonLog.TrimEnd()}" +
+                $" | sender_id:{senderId}" +
+                $" | transaction_no:{txNo}" +
+                $" | severity:{severity}" +
+                $" | message:{severity} log alindi." +
+                $" | {debugNote}";
+
+            Console.WriteLine($"[2. ADIM - ZENGINLESTIRME] sender_id:{senderId} | tx:{txNo} | severity:{severity}");
+
             if (_nextHandler != null)
-            {
                 _nextHandler.Handle(enrichedLog);
-            }
         }
     }
 }

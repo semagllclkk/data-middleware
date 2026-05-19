@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -42,7 +42,9 @@ namespace Producer
                     
                     // 2. Mock (Sahte) Verilerle içini doldur
                     newLog.UserId = $"USER_{rnd.Next(100, 999)}";
-                    newLog.TCKN = "12345678901"; // İleride KVKK filtresine takılacak
+                    newLog.TCKN = "12345678901";           // KVKK: TCKN maskelenecek
+                    newLog.Email = "kullanici@example.com"; // KVKK: e-posta maskelenecek
+                    newLog.CreditCard = "4111-1111-1111-1111"; // KVKK: kredi kartı maskelenecek
                     
                     // Polimorfizm: Eğer bu bir hata loguysa, hata mesajını da ekle
                     if (newLog is ErrorLog errorLog) 

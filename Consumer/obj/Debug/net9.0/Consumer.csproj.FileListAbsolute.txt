@@ -16,3 +16,4 @@ C:\Users\thinkpad\Desktop\MiddlewareProject\Consumer\obj\Debug\net9.0\refint\Con
 C:\Users\thinkpad\Desktop\MiddlewareProject\Consumer\obj\Debug\net9.0\Consumer.pdb
 C:\Users\thinkpad\Desktop\MiddlewareProject\Consumer\obj\Debug\net9.0\Consumer.genruntimeconfig.cache
 C:\Users\thinkpad\Desktop\MiddlewareProject\Consumer\obj\Debug\net9.0\ref\Consumer.dll
+C:\Users\thinkpad\Desktop\MiddlewareProject\Consumer\obj\Debug\net9.0\Consumer.sourcelink.json

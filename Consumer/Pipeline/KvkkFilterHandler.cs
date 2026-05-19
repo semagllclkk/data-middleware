@@ -7,19 +7,23 @@ namespace Consumer.Pipeline
     {
         public override void Handle(string jsonLog)
         {
-            // TCKN için 11 haneli sayıları bulup yıldızlarla (maskeleme) değiştiriyoruz
-            // "12345678901" -> "***********"
+            // 1) TCKN: 11 haneli sayı -> "***********"
             string maskedLog = Regex.Replace(jsonLog, @"\b\d{11}\b", "***********");
-            
-            // İleride buraya E-posta ve Kredi Kartı regex'leri de eklenebilir.
-            
-            Console.WriteLine("\n[1. ADIM - KVKK] Hassas veriler maskelendi.");
 
-            // Zincirde başka halka varsa veriyi ona yolla
+            // 2) E-posta adresleri -> "***@***.***"
+            maskedLog = Regex.Replace(maskedLog,
+                @"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
+                "***@***.***");
+
+            // 3) Kredi kartı numarası (XXXX-XXXX-XXXX-XXXX veya 16 hane) -> "****-****-****-****"
+            maskedLog = Regex.Replace(maskedLog,
+                @"\b(?:\d{4}[-\s]?){3}\d{4}\b",
+                "****-****-****-****");
+
+            Console.WriteLine("[1. ADIM - KVKK] Hassas veriler maskelendi: TCKN, E-posta, Kredi Kartı.");
+
             if (_nextHandler != null)
-            {
-                _nextHandler.Handle(maskedLog); 
-            }
+                _nextHandler.Handle(maskedLog);
         }
     }
 }

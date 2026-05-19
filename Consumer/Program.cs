@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -18,47 +18,56 @@ namespace Consumer
             listener.Start();
             Console.WriteLine($"Port {port} üzerinden veri akışı bekleniyor...\n");
 
-            // Sonsuz döngü ile sürekli yeni bağlantı bekliyoruz (Kapanmasın diye)
+            // Sonsuz döngü ile sürekli yeni bağlantı bekliyoruz
             while (true)
             {
                 TcpClient client = await listener.AcceptTcpClientAsync();
-                
-                // Bağlantı geldiğinde ana iş parçacığını (thread) kilitlememek için 
-                // işlemi asenkron olarak fırlatıp yeni veri beklemeye devam ediyoruz.
                 _ = HandleClientAsync(client); 
             }
         }
 
-       static async Task HandleClientAsync(TcpClient client)
-{
-    using NetworkStream stream = client.GetStream();
-    byte[] buffer = new byte[2048];
-    int bytesRead;
+        static async Task HandleClientAsync(TcpClient client)
+        {
+            using NetworkStream stream = client.GetStream();
+            byte[] buffer = new byte[4096];
+            int bytesRead;
 
-    // 1. ZİNCİRİ İNŞA EDİYORUZ (Bir kere oluşturmak yeterli)
-    var filter = new Pipeline.KvkkFilterHandler();
-    var enrichment = new Pipeline.EnrichmentHandler();
-    var formatter = new Pipeline.FormatterHandler();
-    var performance = new Pipeline.PerformanceHandler();
+            // --- ZİNCİRİ İNŞA EDİYORUZ (Chain of Responsibility) ---
+            var filter      = new Pipeline.KvkkFilterHandler();
+            var enrichment  = new Pipeline.EnrichmentHandler();
+            var performance = new Pipeline.PerformanceHandler();
 
-// SİHİRLİ DOKUNUŞ BURADA: Biçimlendirme stratejisini dinamik olarak CSV yapıyoruz
-    formatter.SetStrategy(new Consumer.Formatters.CsvFormatter());
-    formatter.SetStrategy(new Consumer.Formatters.HtmlFormatter());
-    formatter.SetStrategy(new Consumer.Formatters.TxtFormatter());
+            // Her rol için ayrı bir FormatterHandler oluşturuyoruz (Strategy Pattern)
+            // System Admin  -> HTML
+            // CyberSec      -> CSV
+            // Web Dev       -> JSON
+            var formatterHtml = new Pipeline.FormatterHandler();
+            var formatterCsv  = new Pipeline.FormatterHandler();
+            var formatterJson = new Pipeline.FormatterHandler();
 
+            formatterHtml.SetStrategy(new Consumer.Formatters.HtmlFormatter());
+            formatterCsv .SetStrategy(new Consumer.Formatters.CsvFormatter());
+            formatterJson.SetStrategy(new Consumer.Formatters.JsonFormatter());
 
-    // Halkaları birbirine bağlıyoruz
-    filter.SetNext(enrichment).SetNext(formatter).SetNext(performance);
+            // Zincir: KVKK -> Zenginlestirme -> [HTML | CSV | JSON] -> Performans
+            // Her log üç role de ayrı ayrı iletilecek; bunun için FormatterHandler'lar
+            // tek bir "fan-out" noktasında çağrılıyor.
+            var fanOut = new Pipeline.FanOutHandler(
+                new[] { formatterHtml, formatterCsv, formatterJson },
+                performance
+            );
 
-    while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0)
-    {
-        string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-        Console.WriteLine($"\n--- YENİ VERİ GELDİ ---");
-        
-        // 2. GELEN VERİYİ ZİNCİRİN İLK HALKASINA TESLİM EDİYORUZ
-        filter.Handle(message); 
-    }
-    client.Close();
-}
+            filter.SetNext(enrichment).SetNext(fanOut);
+
+            while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0)
+            {
+                string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                Console.WriteLine("\n--- YENİ VERİ GELDİ ---");
+                
+                // Gelen veriyi zincirin ilk halkasına teslim ediyoruz
+                filter.Handle(message); 
+            }
+            client.Close();
+        }
     }
 }
