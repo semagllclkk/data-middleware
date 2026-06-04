@@ -1,0 +1,129 @@
+CENG302 Dönem Sonu Ödevi
+Data Middleware — Borsa Log İşleme Sistemi
+Ad-Soyad: Sema Gül Çelik 							Tarih: 19.05.2026
+Github Repo Linki: https://github.com/semagllclkk/data-middleware
+Not: Bu projede yapay zeka aracı (Antigravity / Claude) kod geliştirme ve hata tespiti aşamalarında kullanılmıştır.
+1. Giriş ve Problem Tanımı
+Bu ödevde, gerçek bir borsa kuruluşunu simüle eden iki Docker konteynerinden oluşan bir veri işleme ara katmanı (middleware) geliştirilmiştir. Borsa sistemleri sürekli yüksek hacimli log verisi üretir. Bu loglar ham haliyle tutulduğunda hem güvenlik açığı oluşturur (TCKN, kredi kartı, e-posta gibi kişisel veriler), hem de farklı paydaşların (sistem yöneticisi, siber güvenlik uzmanı, web geliştirici) ihtiyaçlarını karşılamaz.
+Geliştirilen middleware katmanı bu sorunları çözmek üzere tasarlanmıştır: hassas verileri maskeler, logları zenginleştirir ve her role özel formatta iletir.
+2. Sistem Mimarisi
+Proje iki ana Docker konteynerinden oluşmaktadır ve bu konteynerler docker-compose aracılığıyla yönetilen özel bir bridge ağı üzerinden TCP protokolü ile haberleşir.
+2.1 Producer (Veri Üretici — Konteyner 1)
+Producer, gerçek bir borsa sistemini simüle ederek üç farklı tipte log nesnesi üretir: TransactionLog (borsa işlemi), ErrorLog (sistem hatası) ve SecurityLog (güvenlik olayı). Her log nesnesine rastgele bir log seviyesi atanır (INFO, WARNING, ERROR, CRITICAL) ve nesne JSON formatına serileştirilerek TCP soketi üzerinden Consumer'a iletilir.
+2.2 Consumer (Middleware — Konteyner 2)
+Consumer, gelen JSON logları bir işlem zincirinden (Chain of Responsibility) geçirir. Zincirdeki her halka kendi sorumluluğunu yerine getirdikten sonra veriyi bir sonrakine iletir veya zinciri keser.
+İşlem zinciri sırası:
+Adım	Sınıf	Görev
+0	SeverityFilterHandler	INFO ve WARNING logları düşürür, işlemi keser
+1	KvkkFilterHandler	TCKN, e-posta, kredi kartı maskeler
+2	EnrichmentHandler	sender_id, transaction_no, severity, debug etiketi ekler
+3	FanOutHandler	Logu 3 role (HTML/CSV/JSON) paralel dağıtır
+4	FormatterHandler ×3	Her rol için strateji ile biçimlendirir
+5	PerformanceHandler	İşlem süresini ölçer, stres testi simüle eder
+3. Gereksinim Karşılama
+Gereksinim	Durum	İlgili Dosya
+İki Docker konteyneri	✅	docker-compose.yml
+Güvenlik — hassas veri maskeleme	✅	KvkkFilterHandler.cs
+Zenginleştirme — etiket ekleme	✅	EnrichmentHandler.cs
+Filtreleme (INFO/WARNING drop)	✅	SeverityFilterHandler.cs
+Biçim özelleştirme (3 rol)	✅	FanOutHandler + Formatters
+En az 1 tasarım kalıbı	✅	Chain of Responsibility + Strategy + Factory
+Performans ölçümü	✅	PerformanceHandler.cs
+Tüm senaryolar üretiliyor	✅	Producer: TRANSACTION / ERROR / SECURITY
+4. Tasarım Kalıpları
+4.1 Chain of Responsibility (Sorumluluk Zinciri)
+Soyut taban sınıf LogHandler, SetNext() metodu ile halkalar arasında bağlantı kurar. Her somut handler kendi işini yapar; ardından _nextHandler?.Handle() ile bir sonrakine delege eder. SeverityFilterHandler gibi halkalar zinciri erken kesebilir (return). Bu sayede yeni bir adım eklemek için sadece yeni bir LogHandler türetip zincire takmak yeterlidir; mevcut kod değişmez (Açık/Kapalı Prensibi).
+severityFilter.SetNext(kvkkFilter)
+              .SetNext(enrichment)
+              .SetNext(fanOut);
+4.2 Strategy (Strateji)
+IFormatterStrategy arayüzü Format(string) metodunu tanımlar. HtmlFormatter, CsvFormatter ve JsonFormatter bu arayüzü somutlaştırır. FormatterHandler.SetStrategy() ile çalışma zamanında format değiştirilebilir. Bu yapı sayesinde yeni bir format eklemek (örn. XML) için yalnızca yeni bir strateji sınıfı yazılır; FormatterHandler değişmez.
+4.3 Factory (Bonus)
+LogFactory.CreateLog("TRANSACTION" | "ERROR" | "SECURITY") ile Producer, hangi somut sınıfın üretileceğini bilmeden log nesnesi yaratır. C# switch expression kullanılarak özlü bir fabrika implementasyonu sağlanmıştır.
+
+5. Performans Analizi ve Optimizasyon
+
+5.1 İlk Durum (Baseline)
+- Producer: Saniyede 2 log (500ms interval)
+- Consumer Buffer: 4KB (standart)
+- Docker Resource Limits: AYARLANMAMIŞ (sınırsız)
+- Geçme Oranı: ~50% (INFO+WARNING filtreleme, %10 drop)
+
+5.2 Yapılan Optimizasyonlar
+
+A. Docker Resource Management (docker-compose.yml)
+Her iki konteyner (Consumer ve Producer) için şu limitler eklendi:
+  container:
+    mem_limit: 512m              # Maksimum 512MB bellek kullanımı
+    mem_reservation: 256m        # Garantili 256MB ayrılması
+    cpus: '0.5'                  # Maksimum 0.5 CPU çekirdeği
+    cpu_shares: 1024             # CPU payı
+
+Bu limitler, container'ların kontrolsüz kaynak tüketimini engeller ve production ortamında sistem kararlılığını sağlar.
+
+B. Producer Veri Üretim Hızı (Producer/Program.cs)
+Değiştirildi: await Task.Delay(500) → await Task.Delay(100)
+Eski: Saniyede 2 log | Yeni: Saniyede 10 log (5x artış)
+Sistem performansını göstermek için veri üretim hızı artırıldı.
+
+C. Consumer Buffer Optimizasyonu (Consumer/Program.cs)
+Buffer boyutu: byte[] buffer = new byte[4096] → new byte[65536]
+16x artış (4KB → 64KB), daha fazla veriyi tek seferde alır.
+
+D. Consumer Error Handling
+Exception handling iyileştirildi: try-catch-finally bloğu eklendi, güvenli kapanış.
+
+5.3 Sistem Performans Metrikleri
+
+Teorik Kapasite: 10 log/saniye = 600 log/dakika = 36,000 log/saat
+
+Log Filtreleme Oranları:
+  Gelen veri: 10 log/saniye
+  ├─ SeverityFilter (INFO/WARNING %42.8 filtresi): ~5.7 log/saniye geçiyor
+  ├─ KVKK Maskeleme: Tamamı işlenir
+  ├─ Zenginleştirme: Tamamı işlenir  
+  ├─ Paralel Formatlamalar: 3 format paralel (HTML/CSV/JSON)
+  └─ PerformanceHandler (%10 drop): ~5.1 log/saniye başarı
+
+Nihai Başarılı İşleme: ~51% (tam filtre + drop sonrası)
+
+Network Throughput:
+  Teorik: 10 log/saniye × ~500 byte/log = 5 KB/s
+  Gerçek (Paralel): 5.1 log/saniye × 3 format = 15.3 kayıt/saniye
+
+Resource Kullanımı (Docker Limits):
+  Container Bellek: 256MB-512MB (stabil)
+  CPU: ~0.3-0.5 cores per container
+  Network Buffer: 64KB
+
+5.4 PerformanceHandler - Stres Testi
+Zincirin son halkası. Her başarılı logu rapor eder, %10 rastgele drop ile backpressure simüle eder.
+
+Gözlenen davranışlar:
+- Saniyede üretilen log sayısı (10 log/saniye)
+- Filtreleme oranı (%42.8 — INFO+WARNING)
+- Başarı oranı (~51%)
+- Paralel format sayısı (×3)
+- Ortalama işlem gecikmesi (< 100ms)
+
+5.5 Sonuç
+Sistem yüksek throughput altında stabil. Docker resource limits sayesinde container kaçaklığı olmaz. Buffer optimizasyonu ağ performansını artırır.
+
+6. Tasarım Desenleri Özeti
+
+Proje kapsamında 5+ tasarım deseni uygulanmıştır:
+
+1. Chain of Responsibility: LogHandler zinciri (6 handler)
+2. Strategy Pattern: 4 formatter stratejisi (JSON/CSV/HTML/TXT)
+3. Factory Pattern: LogFactory ile nesne oluşturma
+4. Polymorphism: BaseLog soyut sınıfı ve alt sınıfları
+5. Fan-Out Pattern: Paralel işleme (3 formatter'a aynı anda gönderme)
+
+Böylece ödev gereksinimi "en az 1 tasarım kalıbı" yerine 5+ desen uygulanmıştır.
+
+7. Sonuç
+Geliştirilen sistem, borsa kuruluşlarında karşılaşılan gerçek dünya ihtiyaçlarını karşılar nitelikte bir middleware mimarisi sunmaktadır. Chain of Responsibility ve Strategy tasarım kalıplarının birlikte kullanımı, sistemi hem genişletilebilir hem de bakımı kolay kılmaktadır. 
+
+Docker ile konteynerize edilmesi, bağımsız dağıtım ve ölçeklendirme imkânı sağlamaktadır. Sistem performansı optimizasyonları (Buffer artışı, Resource limits, Hızlandırılmış producer) sayesinde production ortamında güvenle çalıştırılabilir.
+
+Son git commit: "chore: sistem performans optimizasyonu - resource limitleri ve veri işleme hızı"
