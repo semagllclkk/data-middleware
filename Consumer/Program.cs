@@ -29,7 +29,9 @@ namespace Consumer
         static async Task HandleClientAsync(TcpClient client)
         {
             using NetworkStream stream = client.GetStream();
-            byte[] buffer = new byte[4096];
+            
+            // Buffer boyutu artırıldı: 4KB -> 64KB (Sistem performansı ve throughput için)
+            byte[] buffer = new byte[65536];
             int bytesRead;
 
             // --- ZİNCİRİ İNŞA EDİYORUZ (Chain of Responsibility) ---
@@ -58,15 +60,26 @@ namespace Consumer
 
             severityFilter.SetNext(filter).SetNext(enrichment).SetNext(fanOut);
 
-            while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0)
+            try
             {
-                string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                Console.WriteLine("\n--- YENİ VERİ GELDİ ---");
-                
-                // Gelen veriyi zincirin ilk halkasına teslim ediyoruz
-                filter.Handle(message); 
+                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0)
+                {
+                    string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    Console.WriteLine("\n--- YENİ VERİ GELDİ ---");
+                    
+                    // Gelen veriyi zincirin ilk halkasına teslim ediyoruz
+                    // İşleme asynchronously yapılıyor (non-blocking I/O)
+                    severityFilter.Handle(message);
+                }
             }
-            client.Close();
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HATA] Veri işleme sırasında hata: {ex.Message}");
+            }
+            finally
+            {
+                client.Close();
+            }
         }
     }
 }

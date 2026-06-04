@@ -10,6 +10,11 @@ services:
       - "5000:5000"
     networks:
       - middleware-net
+    # Sistem Performansı İçin Resource Limitleri
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: '0.5'
+    cpu_shares: 1024
 
   # 1. Konteyner: Veriyi Üreten ve Fırlatan
   producer-app:
@@ -22,6 +27,11 @@ services:
       - CONSUMER_HOST=consumer-app # Docker network'te service adı kullan
     networks:
       - middleware-net
+    # Sistem Performansı İçin Resource Limitleri
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: '0.5'
+    cpu_shares: 1024
 
 # İki konteynerin birbiriyle güvenle haberleşeceği sanal ağ
 networks:

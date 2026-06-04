@@ -62,8 +62,9 @@ namespace Producer
                     await stream.WriteAsync(data, 0, data.Length);
                     Console.WriteLine($"[GÖNDERİLDİ]: {newLog.GetLogType()} - {newLog.LogId}");
 
-                    // Şimdilik saniyede 2 veri göndersin (Stres testinde bu gecikmeyi sileceğiz)
-                    await Task.Delay(500); 
+                    // Sistem performansı göstermek için: saniyede 10 veri (100ms interval)
+                    // Ek yük testi için bu değeri daha da düşürebilirsiniz
+                    await Task.Delay(100); 
                 }
             }
             catch (Exception ex)
